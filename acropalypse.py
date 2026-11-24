@@ -26,9 +26,11 @@ class Acropalypse():
 		stream.write(crc.to_bytes(4, "big"))
 		
 	# Function called by gui.py when doing the Acropalypse Now!
-	def reconstruct_image(self, cropped_image_file, img_width, img_heigth, rgb_alpha):
+	def reconstruct_image(self, cropped_image_file, img_width, img_heigth, rgb_alpha, output_path=None):
 		PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
+		if not (1 <= img_width <= 65535 and 1 <= img_heigth <= 65535):
+			raise ValueError("Image dimensions must be between 1 and 65535 pixels")
 		orig_width = img_width
 		orig_height = img_heigth
 
@@ -129,7 +131,7 @@ class Acropalypse():
 		print("Generating output PNG...")
 
 		# Writing restored image to the os temp folder. gui.py is grabbing it from there
-		out = open(os.path.join(tempdir, 'restored.png'), "wb")
+		out = open(output_path or os.path.join(tempdir, 'restored.png'), "wb")
 		out.write(PNG_MAGIC)
 
 		ihdr = b""
