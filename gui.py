@@ -1,536 +1,327 @@
-from tkinter import *
-from tkinter import ttk
-from tkinter import font
-from tkinter.filedialog import askopenfilename, askdirectory, asksaveasfilename
-import sv_ttk
+"""Cross-platform Acropalypse recovery GUI (Python 3.10+)."""
+from __future__ import annotations
 
-import os, sys, subprocess
-import time
-from threading import Thread
-import pathlib
+import os
+import platform
+import queue
+import tempfile
+import threading
+from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 from acropalypse import Acropalypse
-
 from gif_lib import acropalypse_gif
 
-import platform
-import tempfile
-import ctypes
-import shutil 
+PRESETS = {
+    "Custom RGB": (1920, 1080, False),
+    "Custom RGBA": (1920, 1080, True),
+    "Windows 11 Snipping Tool": (1920, 1080, True),
+    "Google Pixel 3": (1080, 2160, False),
+    "Google Pixel 3 XL": (1440, 2960, False),
+    "Google Pixel 3a": (1080, 2220, False),
+    "Google Pixel 3a XL": (1080, 2160, False),
+    "Google Pixel 4": (1080, 2280, False),
+    "Google Pixel 4 XL": (1440, 3040, False),
+    "Google Pixel 4a": (1080, 2340, False),
+    "Google Pixel 5": (1080, 2340, False),
+    "Google Pixel 5a": (1080, 2400, False),
+    "Google Pixel 6": (1080, 2400, False),
+    "Google Pixel 6 Pro": (1440, 3120, False),
+    "Google Pixel 6a": (1080, 2400, False),
+    "Google Pixel 7": (1080, 2400, False),
+    "Google Pixel 7 Pro": (1440, 3120, False),
+}
 
 
-# Get the name of the host operating system
-os_name = platform.system()
-tempdir = tempfile.gettempdir()
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Acropalypse Multi-Tool")
+        self.geometry("1120x760")
+        self.minsize(850, 600)
+        self.configure(bg="#171923")
+        self.acro = Acropalypse()
+        self.input_path: Path | None = None
+        self.output_path: Path | None = None
+        self.preview_refs = []
+        self.events: queue.Queue = queue.Queue()
+        self._build_style()
+        self._build_ui()
+        self.after(100, self._poll_events)
 
-#Class used in Detection Window to detect Acropalypse vulnerable images
-class DetectTool(Frame):
-	def open_image(self, event):
-		# Get the selected item
-		selected_item = self.listbox.get(self.listbox.curselection())
-		# Open the image using the default Windows image viewer
-		if os_name == "Windows":
-			os.startfile(selected_item)
-		else:
-			opener = "open" if sys.platform == "darwin" else "xdg-open"
-			subprocess.call([opener, selected_item])
+    def _build_style(self):
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure(".", font=("Segoe UI", 10))
+        style.configure("TFrame", background="#171923")
+        style.configure("Panel.TFrame", background="#222635")
+        style.configure("TLabel", background="#171923", foreground="#edf0f7")
+        style.configure("Muted.TLabel", background="#222635", foreground="#aab2c5")
+        style.configure("Title.TLabel", font=("Segoe UI", 20, "bold"), foreground="#ffffff")
+        style.configure("Subtitle.TLabel", foreground="#aab2c5")
+        style.configure("TButton", padding=(12, 8), background="#343d54", foreground="#ffffff")
+        style.map("TButton", background=[("active", "#465574"), ("disabled", "#292f3e")])
+        style.configure("Accent.TButton", background="#5577d8", foreground="white", font=("Segoe UI", 10, "bold"))
+        style.map("Accent.TButton", background=[("active", "#6689ed")])
+        style.configure("TEntry", fieldbackground="#2b3040", foreground="#ffffff", insertcolor="white", padding=7)
+        style.configure("TCombobox", fieldbackground="#2b3040", foreground="#ffffff", padding=7)
+        style.configure("TNotebook", background="#171923", borderwidth=0)
+        style.configure("TNotebook.Tab", padding=(18, 10), background="#222635", foreground="#cbd2e1")
+        style.map("TNotebook.Tab", background=[("selected", "#343d54")], foreground=[("selected", "#ffffff")])
+        style.configure("Treeview", background="#222635", fieldbackground="#222635", foreground="#edf0f7", rowheight=28)
+        style.configure("Treeview.Heading", background="#343d54", foreground="white")
+        style.configure("Horizontal.TProgressbar", troughcolor="#2b3040", background="#6689ed")
 
-	def on_resize(self, event):
-		self.update_wraplength(self.lower_frame)
+    def _build_ui(self):
+        header = ttk.Frame(self, padding=(24, 20, 24, 12))
+        header.pack(fill="x")
+        ttk.Label(header, text="Acropalypse Multi-Tool", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(header, text="Détection et reconstruction d’images PNG / GIF vulnérables", style="Subtitle.TLabel").pack(anchor="w", pady=(4, 0))
+        self.tabs = ttk.Notebook(self)
+        self.tabs.pack(fill="both", expand=True, padx=20, pady=(4, 18))
+        self.detect_tab = ttk.Frame(self.tabs, padding=18)
+        self.restore_tab = ttk.Frame(self.tabs, padding=18)
+        self.tabs.add(self.detect_tab, text="  Détection  ")
+        self.tabs.add(self.restore_tab, text="  Reconstruction  ")
+        self._build_detection()
+        self._build_restore()
+        self.status = tk.StringVar(value="Prêt")
+        ttk.Label(self, textvariable=self.status, anchor="w", padding=(22, 8), style="Subtitle.TLabel").pack(fill="x")
 
-	def update_wraplength(self, frame):
-		wraplength = self.calculate_wraplength(frame)
+    def _build_detection(self):
+        top = ttk.Frame(self.detect_tab)
+        top.pack(fill="x", pady=(0, 12))
+        ttk.Label(top, text="Rechercher les fichiers suspects", font=("Segoe UI", 14, "bold")).pack(side="left")
+        ttk.Button(top, text="Choisir un dossier…", style="Accent.TButton", command=self.scan_folder).pack(side="right")
+        ttk.Label(self.detect_tab, text="Analyse récursive des fichiers PNG et GIF. Double-cliquez sur un résultat pour l’ouvrir.", style="Muted.TLabel").pack(anchor="w", pady=(0, 12))
+        columns = ("type", "path")
+        self.results = ttk.Treeview(self.detect_tab, columns=columns, show="headings")
+        self.results.heading("type", text="Format")
+        self.results.heading("path", text="Fichier potentiellement vulnérable")
+        self.results.column("type", width=90, stretch=False)
+        self.results.column("path", width=800)
+        scroll = ttk.Scrollbar(self.detect_tab, orient="vertical", command=self.results.yview)
+        self.results.configure(yscrollcommand=scroll.set)
+        self.results.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+        self.results.bind("<Double-1>", self.open_result)
+        self.scan_count = tk.StringVar(value="Aucun scan effectué")
+        ttk.Label(self.detect_tab, textvariable=self.scan_count, style="Muted.TLabel").pack(anchor="w", pady=(10, 0))
 
-	def calculate_wraplength(self, frame):
-		return frame.winfo_width() * 0.8
-	
-	#Search given directory for all images of type .gif and .png and detect trailing data
-	def on_detect(self):
-		search_dir = askdirectory(parent=self)
-		if search_dir:
-			for filename in os.listdir(search_dir):
-				search_file = os.path.join(search_dir, filename)
-				if os.path.isfile(search_file):
-					if pathlib.Path(search_file).suffix == ".gif":
-						response = acropalypse_gif.detect(search_file)
-						if response:
-							if not f"{search_file}" in self.listbox.get(0, "end"):
-								self.listbox.insert(END, f"{search_file}")
-					elif pathlib.Path(search_file).suffix == ".png":
-						response = self.acropalypse_Instance.detect_png(search_file)
-						if response:
-							if not f"{search_file}" in self.listbox.get(0, "end"):
-								self.listbox.insert(END, f"{search_file}")
-			self.listbox.pack(side="left", fill="both", expand=True)
-			
-	#Initialize Window for gui
-	def __init__(self, master, frame):
-		super().__init__(master)
-		self.acropalypse_Instance = Acropalypse()
-		self.frame = frame
-		self.master = master
-		self.pack(fill=BOTH, expand=1)
+    def _build_restore(self):
+        toolbar = ttk.Frame(self.restore_tab)
+        toolbar.pack(fill="x", pady=(0, 14))
+        ttk.Button(toolbar, text="Ouvrir une image…", style="Accent.TButton", command=self.choose_image).pack(side="left")
+        self.file_label = ttk.Label(toolbar, text="Aucune image sélectionnée", style="Muted.TLabel")
+        self.file_label.pack(side="left", padx=12)
+        settings = ttk.Frame(self.restore_tab, style="Panel.TFrame", padding=14)
+        settings.pack(fill="x", pady=(0, 14))
+        ttk.Label(settings, text="Profil de capture", style="Muted.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.preset = tk.StringVar(value="Custom RGB")
+        combo = ttk.Combobox(settings, textvariable=self.preset, values=list(PRESETS), state="readonly", width=31)
+        combo.grid(row=1, column=0, sticky="ew", padx=(0, 18), pady=(5, 0))
+        combo.bind("<<ComboboxSelected>>", self.apply_preset)
+        ttk.Label(settings, text="Largeur originale", style="Muted.TLabel").grid(row=0, column=1, sticky="w")
+        ttk.Label(settings, text="Hauteur originale", style="Muted.TLabel").grid(row=0, column=2, sticky="w", padx=(12, 0))
+        self.width = tk.StringVar(value="1920")
+        self.height = tk.StringVar(value="1080")
+        ttk.Entry(settings, textvariable=self.width, width=12).grid(row=1, column=1, sticky="ew", pady=(5, 0))
+        ttk.Entry(settings, textvariable=self.height, width=12).grid(row=1, column=2, sticky="ew", padx=(12, 0), pady=(5, 0))
+        settings.columnconfigure(0, weight=2)
+        settings.columnconfigure(1, weight=1)
+        settings.columnconfigure(2, weight=1)
+        actions = ttk.Frame(self.restore_tab)
+        actions.pack(fill="x", pady=(0, 12))
+        self.restore_btn = ttk.Button(actions, text="Reconstruire l’image", style="Accent.TButton", command=self.start_restore)
+        self.restore_btn.pack(side="left")
+        self.save_btn = ttk.Button(actions, text="Enregistrer le résultat…", command=self.save_result, state="disabled")
+        self.save_btn.pack(side="left", padx=10)
+        self.progress = ttk.Progressbar(actions, mode="indeterminate", length=180)
+        self.progress.pack(side="right")
+        previews = ttk.Frame(self.restore_tab)
+        previews.pack(fill="both", expand=True)
+        self.original_panel = self._preview_panel(previews, "Image source")
+        self.restored_panel = self._preview_panel(previews, "Image reconstruite")
+        previews.columnconfigure(0, weight=1)
+        previews.columnconfigure(1, weight=1)
+        previews.rowconfigure(0, weight=1)
 
-		# Calculate the height for the two sections
-		upper_height = int(frame.root_height * 0.10)
-		lower_height = int(frame.root_height * 0.90)
-		window_width = int(frame.root_width)
+    def _preview_panel(self, parent, title):
+        panel = ttk.Frame(parent, style="Panel.TFrame", padding=12)
+        # caller positions panels after creation
+        idx = 0 if title == "Image source" else 1
+        panel.grid(row=0, column=idx, sticky="nsew", padx=(0, 6) if idx == 0 else (6, 0))
+        ttk.Label(panel, text=title, style="Muted.TLabel").pack(anchor="w")
+        label = ttk.Label(panel, text="Aperçu indisponible", style="Muted.TLabel", anchor="center")
+        label.pack(fill="both", expand=True, pady=8)
+        if idx == 0:
+            self.original_preview = label
+        else:
+            self.restored_preview = label
+        return panel
 
-		# Create the upper section
-		upper_frame = Frame(self, height=upper_height, bg="grey")
-		upper_frame.grid(row=0, column=0, sticky="nsew")
+    def apply_preset(self, _event=None):
+        w, h, _alpha = PRESETS[self.preset.get()]
+        self.width.set(str(w))
+        self.height.set(str(h))
 
-		# Create a canvas in the upper section
-		canvas = Canvas(upper_frame, height=upper_height, bg="grey", highlightthickness=0)
-		canvas.pack(fill="both", expand=True)
+    def choose_image(self):
+        name = filedialog.askopenfilename(filetypes=[("Images PNG/GIF", "*.png *.gif"), ("Tous les fichiers", "*.*")])
+        if not name:
+            return
+        self.input_path = Path(name)
+        self.output_path = None
+        self.file_label.configure(text=self.input_path.name)
+        self.save_btn.configure(state="disabled")
+        self._show_preview(self.input_path, self.original_preview)
+        self.restored_preview.configure(image="", text="En attente de reconstruction")
+        self.restored_preview.image = None
+        self.status.set("Image chargée. Vérifiez le profil et les dimensions.")
 
-		# Create and center the button in the upper section
-		center_button = ttk.Button(upper_frame, text="Select Folder", command=self.on_detect)
-		canvas.create_window(window_width // 2, upper_height // 2, window=center_button, anchor="center")
+    def _show_preview(self, path, target):
+        try:
+            with Image.open(path) as im:
+                im.seek(0)
+                preview = im.convert("RGBA")
+                preview.thumbnail((520, 360))
+            photo = ImageTk.PhotoImage(preview)
+            target.configure(image=photo, text="")
+            target.image = photo
+        except Exception as exc:
+            target.configure(image="", text=f"Aperçu impossible : {exc}")
+            target.image = None
 
-		# Create the lower section
-		lower_frame = Frame(self, height=lower_height)
-		lower_frame.grid(row=1, column=0, sticky="nsew")
+    def start_restore(self):
+        if not self.input_path:
+            messagebox.showinfo("Image requise", "Sélectionnez d’abord une image.")
+            return
+        try:
+            w, h = int(self.width.get()), int(self.height.get())
+            if not (1 <= w <= 65535 and 1 <= h <= 65535):
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Dimensions invalides", "La largeur et la hauteur doivent être des entiers entre 1 et 65535.")
+            return
+        if self.input_path.suffix.lower() == ".gif" and acropalypse_gif is None:
+            messagebox.showerror("Extension GIF absente", "Le module natif GIF n’est pas installé.\nConsultez BUILD.md pour le compiler sur Windows ou Linux.")
+            return
+        self.restore_btn.configure(state="disabled")
+        self.save_btn.configure(state="disabled")
+        self.progress.start(12)
+        self.status.set("Reconstruction en cours…")
+        source = self.input_path
+        alpha = PRESETS[self.preset.get()][2]
+        def worker():
+            try:
+                suffix = ".gif" if source.suffix.lower() == ".gif" else ".png"
+                fd, output = tempfile.mkstemp(prefix="acropalypse_", suffix=suffix)
+                os.close(fd)
+                Path(output).unlink(missing_ok=True)
+                if suffix == ".gif":
+                    acropalypse_gif.restore(str(source), output, w, h)
+                else:
+                    self.acro.reconstruct_image(str(source), w, h, alpha, output_path=output)
+                self.events.put(("restore_ok", output))
+            except Exception as exc:
+                self.events.put(("restore_error", str(exc)))
+        threading.Thread(target=worker, daemon=True).start()
 
-		# Create a scrollable list of strings in the lower section
-		scrollbar = ttk.Scrollbar(lower_frame)
-		scrollbar.pack(side="right", fill="y")
+    def _poll_events(self):
+        try:
+            while True:
+                kind, payload = self.events.get_nowait()
+                if kind == "scan_done":
+                    for item in self.results.get_children():
+                        self.results.delete(item)
+                    for path in payload:
+                        self.results.insert("", "end", values=(Path(path).suffix[1:].upper(), path))
+                    self.scan_count.set(f"{len(payload)} fichier(s) suspect(s) trouvé(s)")
+                    self.status.set("Analyse terminée")
+                elif kind == "scan_error":
+                    messagebox.showerror("Erreur d’analyse", payload)
+                    self.status.set("Échec de l’analyse")
+                elif kind == "restore_ok":
+                    self.output_path = Path(payload)
+                    self._show_preview(self.output_path, self.restored_preview)
+                    self.save_btn.configure(state="normal")
+                    self.status.set(f"Reconstruction terminée : {self.output_path.name}")
+                    self._finish_restore()
+                elif kind == "restore_error":
+                    messagebox.showerror("Échec de la reconstruction", payload)
+                    self.status.set("La reconstruction a échoué")
+                    self._finish_restore()
+        except queue.Empty:
+            pass
+        self.after(100, self._poll_events)
 
-		# Add a title for the listbox
-		listbox_title = Label(lower_frame, text="Potentially vulnerable Images", font=("Helvetica", 14))
-		listbox_title.pack(pady=(20, 20))
+    def _finish_restore(self):
+        self.progress.stop()
+        self.restore_btn.configure(state="normal")
 
-		listbox = Listbox(lower_frame, yscrollcommand=scrollbar.set, font=("Helvetica", 10))
-		self.listbox = listbox
-		scrollbar.config(command=listbox.yview)
+    def scan_folder(self):
+        folder = filedialog.askdirectory()
+        if not folder:
+            return
+        self.status.set("Analyse du dossier en cours…")
+        def worker():
+            found = []
+            try:
+                for base, _dirs, files in os.walk(folder):
+                    for filename in files:
+                        path = Path(base) / filename
+                        suffix = path.suffix.lower()
+                        try:
+                            if suffix == ".png":
+                                vulnerable = self.acro.detect_png(str(path))
+                            elif suffix == ".gif" and acropalypse_gif is not None:
+                                vulnerable = acropalypse_gif.detect(str(path))
+                            else:
+                                continue
+                            if vulnerable:
+                                found.append(str(path))
+                        except Exception:
+                            continue
+                self.events.put(("scan_done", found))
+            except Exception as exc:
+                self.events.put(("scan_error", str(exc)))
+        threading.Thread(target=worker, daemon=True).start()
 
-		# Configure grid weights to allow for resizing
-		self.grid_rowconfigure(0, weight=1)
-		self.grid_rowconfigure(1, weight=4)
-		self.grid_columnconfigure(0, weight=1)
+    def open_result(self, _event=None):
+        selection = self.results.selection()
+        if not selection:
+            return
+        path = self.results.item(selection[0], "values")[1]
+        try:
+            if platform.system() == "Windows":
+                os.startfile(path)
+            elif platform.system() == "Darwin":
+                import subprocess
+                subprocess.Popen(["open", path])
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", path])
+        except Exception as exc:
+            messagebox.showerror("Ouverture impossible", str(exc))
 
-		self.lower_frame = lower_frame
-		self.upper_frame = upper_frame
+    def save_result(self):
+        if not self.output_path or not self.output_path.exists():
+            return
+        ext = self.output_path.suffix
+        name = filedialog.asksaveasfilename(
+            defaultextension=ext,
+            initialfile=f"{self.input_path.stem}_reconstructed{ext}",
+            filetypes=[(f"{ext[1:].upper()} files", f"*{ext}")],
+        )
+        if name:
+            import shutil
+            shutil.copy2(self.output_path, name)
+            self.status.set(f"Image enregistrée : {name}")
 
-		self.master.bind('<Configure>', self.on_resize)
-				
-		# Bind the double-click event to the listbox
-		listbox.bind("<Double-Button-1>", self.open_image)
-
-#Class used in Restoration Window to restore Acropalypse vulnerable images		
-class RestoreTool(Frame):
-	def __init__(self, master, frame):
-		super().__init__(master)
-		self.frame = frame
-		self.master = master
-		self.rgb_alpha = False
-		self.pack(fill=BOTH, expand=1)
-		
-		self.acropalypse_Instance = Acropalypse()
-		self.cropped_image_file = None
-		self.reconstructing=False
-		left_frame_width = int(frame.root_width * 0.4)
-		middle_frame_width = int(frame.root_width * 0.2)
-		right_frame_width = int(frame.root_width * 0.4)
-		frame_height = int(frame.root_height)
-
-		# GUI-Elemente erstellen
-		left_frame = Frame(self, width=left_frame_width, height=frame_height, bg='grey')
-		left_frame.grid(row=0, column=0, sticky="ns")
-		left_frame.grid_propagate(False)
-		left_frame.pack_propagate(0)
-		
-		middle_frame = Frame(self, width=middle_frame_width, height=frame_height, relief='sunken')
-		middle_frame.grid(row=0, column=1, sticky="ns", padx=(middle_frame_width * 0.1, middle_frame_width * 0.1))
-		# Make the frame sticky for every case
-        # Make the frame sticky for every case
-		middle_frame.grid_rowconfigure(0, weight=1)
-		middle_frame.grid_rowconfigure(1, weight=1)
-		middle_frame.grid_rowconfigure(2, weight=1)
-		middle_frame.grid_rowconfigure(3, weight=1)
-		middle_frame.grid_rowconfigure(4, weight=1)
-		middle_frame.grid_rowconfigure(5, weight=1)
-		middle_frame.grid_rowconfigure(6, weight=1)
-		middle_frame.grid_rowconfigure(7, weight=1)
-		middle_frame.grid_rowconfigure(8, weight=1)
-		middle_frame.grid_columnconfigure(0, weight=1)
-		middle_frame.grid_columnconfigure(1, weight=1)
-		middle_frame.grid_columnconfigure(2, weight=1)
-		middle_frame.grid_propagate(False)
-		middle_frame.pack_propagate(0)
-		
-		right_frame = Frame(self, width=right_frame_width, height=frame_height, bg='grey')
-		right_frame.grid(row=0, column=2, sticky="ns")
-		right_frame.grid_propagate(False)
-		right_frame.pack_propagate(0)
-		
-		self.columnconfigure(0, weight=1)  # Change weight
-		self.columnconfigure(1, weight=1)  # Change weight
-		self.columnconfigure(2, weight=1)  # Change weight
-		self.rowconfigure(0, weight=1)
-		
-		self.left_label = Label(left_frame, bg='grey')
-		self.left_label.grid(row=0, column=0, sticky="ns")
-		self.right_label = Label(right_frame, bg='grey')
-		self.right_label.grid(row=0, column=0, sticky="ns")
-
-		# Initialize Image Variable
-		self.right_label.image = None
-		
-		padding_top = int(frame_height * 0.08)
-		self.button = ttk.Button(middle_frame, text="Select Image", command=self.load_image).grid(row=0, column=1, pady=(padding_top, 0), sticky='ns')
-		
-		self.label_image_path = ttk.Label(middle_frame, text="No Image selected", anchor='center', justify='center')
-		self.label_image_path.grid(row=1, column=1, pady=(int(frame_height * 0.01), 0), padx=(middle_frame_width * 0.1, middle_frame_width * 0.1), sticky='ns')
-		self.label_image_path.config(wraplength=self.calculate_wraplength(middle_frame), anchor='center', justify='center')
-		
-		# Drop-Down Menu Options
-		options = ["-- select option --", "Custom RGBA", "Custom RGB", "Windows 11 Snipping Tool", "Google Pixel 3", "Google Pixel 3 XL", "Google Pixel 3a", "Google Pixel 3a XL", "Google Pixel 4", "Google Pixel 4 XL", "Google Pixel 4a", "Google Pixel 5", "Google Pixel 5a", "Google Pixel 6", "Google Pixel 6 Pro", "Google Pixel 6a", "Google Pixel 7", "Google Pixel 7 Pro"]
-		menu_width = len(max(options, key=len))
-
-		# Dropdown default Config
-		self.dropdown = StringVar()
-		self.dropdown.set(options[0])
-
-		# Drop-Down Menu creation
-		drop_down_menu = ttk.OptionMenu(middle_frame, self.dropdown, *options, command=self.on_option_changed)
-		drop_down_menu.config(width=menu_width)
-		drop_down_menu.grid(row=2, column=1, pady=int(frame_height*0.03), sticky='ns')
-
-		self.width_label = ttk.Label(middle_frame, text="Original Width:").grid(row=3, column=1, pady=int(frame_height*0.003))
-		self.width_entry = ttk.Entry(middle_frame)
-		self.width_entry.grid(row=4, column=1, pady=int(frame_height*0.01), sticky='ns')  # Add this line to place the Entry Box in the grid layout
-		self.width_entry.configure(justify='center')  # Add this line to center the text in the Entry
-
-		self.height_label = ttk.Label(middle_frame, text="Original Height:").grid(row=5, column=1, pady=int(frame_height*0.003))
-		self.height_entry = ttk.Entry(middle_frame)
-		self.height_entry.grid(row=6, column=1, pady=int(frame_height*0.01), sticky='ns')
-		self.height_entry.configure(justify='center')  # Add this line to center the text in the Entry
-
-
-		self.button_acrop = ttk.Button(middle_frame, text="Acropalypse Now!", command=self.on_button, style='my.TButton').grid(row=7, column=1, pady=int(frame_height*0.01), sticky='ns')
-		self.label_log = Label(middle_frame, text="Please select an image", anchor='center', justify='center')
-		self.label_log.grid(row=8, column=1, pady=int(frame_height*0.06), sticky='ns')
-		self.label_image_path.config(wraplength=self.calculate_wraplength(middle_frame))
-		self.label_log.config(wraplength=self.calculate_wraplength(middle_frame), anchor='center', justify='center')
-		self.on_option_changed()
-
-		self.middle_frame = middle_frame
-		self.right_frame = right_frame
-		self.left_frame = left_frame
-
-		# Add save button
-		self.save_button = ttk.Button(self.right_frame, text="Save Image", command=self.save_image)
-		self.save_button.place(relx=1.0, rely=0.0, x=-5, y=5, anchor="ne")
-		self.reconstructing = False
-
-		self.master.bind('<Configure>', self.on_resize)
-
-	def on_resize(self, event):
-		self.update_wraplength(self.middle_frame)
-
-	def update_wraplength(self, frame):
-		wraplength = self.calculate_wraplength(frame)
-		self.label_image_path.config(wraplength=wraplength)
-		self.label_log.config(wraplength=wraplength)
-
-	def calculate_wraplength(self, frame):
-		return frame.winfo_width() * 0.8
-	
-	#Update Optionsmenu on change
-	def on_option_changed(self, *args):
-		self.selected_option = self.dropdown.get()
-		self.rgb_alpha = False
-		if self.selected_option == "-- select screenshot program --":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1920")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "1080")
-		elif self.selected_option == "Windows 11 Snipping Tool":
-			self.rgb_alpha = True
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1920")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "1080")
-		elif self.selected_option == "Custom RGBA":
-			self.rgb_alpha = True
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "0")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "0")
-		elif self.selected_option == "Custom RGB":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "0")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "0")
-		elif self.selected_option == "Google Pixel 3" or self.selected_option == "Google Pixel 3a XL":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1080")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "2160")
-		elif self.selected_option == "Google Pixel 3 XL":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1440")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "2960")
-		elif self.selected_option == "Google Pixel 3a":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1080")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "2220")
-		elif self.selected_option == "Google Pixel 4":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1080")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "2280")
-		elif self.selected_option == "Google Pixel 4 XL":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1440")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "3040")
-		elif self.selected_option == "Google Pixel 4a" or self.selected_option =="Google Pixel 5":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1080")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "2340")
-		elif self.selected_option == "Google Pixel 5a" or self.selected_option =="Google Pixel 6" or self.selected_option =="Google Pixel 6a" or self.selected_option =="Google Pixel 7":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1080")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "2400")
-		elif self.selected_option == "Google Pixel 6 Pro" or self.selected_option =="Google Pixel 7 Pro":
-			self.width_entry.delete(0,END)
-			self.width_entry.insert(0, "1440")
-			self.height_entry.delete(0,END)
-			self.height_entry.insert(0, "3120")
-			
-		
-	def load_image(self):
-		# Dialogfenster zum Auswählen einer Datei öffnen
-		self.cropped_image_file = askopenfilename(filetypes=[("Images", "*.png *.gif")], parent=self)
-				
-		# Bild laden und in beide Labels einfügen
-		print(self.cropped_image_file)
-		if self.cropped_image_file:
-			image = Image.open(self.cropped_image_file)
-			
-			# Größe des Bildes entsprechend anpassen
-			max_width = round(self.left_frame.winfo_width() * 0.98)
-			max_height = round(self.left_frame.winfo_height() * 0.98)
-			width, height = image.size
-			if width > max_width:
-				new_height = int(height * max_width / width)
-				image = image.resize((max_width, new_height))
-				width, height = image.size
-			if height > max_height:
-				new_width = int(width * max_height / height)
-				image = image.resize((new_width, max_height))
-			
-			photo = ImageTk.PhotoImage(image)
-			self.left_label.config(image=photo)
-			self.left_label.image = photo
-			self.left_label.pack()
-		
-			self.right_label.config(image='')
-			# Extract the file name from the path
-			file_name = os.path.basename(self.cropped_image_file)
-			self.label_image_path.config(text=file_name, anchor='center', justify='center')
-			self.label_log.config(text="Select picture mode and press button to reconstruct", anchor='center', justify='center')
-			
-		
-	def on_button(self):
-		if not self.reconstructing:
-			if not self.cropped_image_file:
-				self.label_log.config(text="Please select an image first.", anchor='center', justify='center')
-				return
-			self.label_log.config(text="Reconstructing image, please wait...", anchor='center', justify='center')
-			t= Thread(target=self.acrop_now)
-			t.start()
-			self.reconstructing=True
-	
-	#Load the specified .gif or .png and use the Libraries to restore the original picture from the cropped image 
-	def acrop_now(self):
-		if pathlib.Path(self.cropped_image_file).suffix == ".gif":
-			try:
-				acropalypse_gif.restore(self.cropped_image_file, os.path.join(tempdir, 'restored.gif'),int(self.width_entry.get() or 1920), int(self.height_entry.get() or 1080))
-			except Exception as e:
-				self.label_log.config(text=f"Error reconstructing the image: {e}", anchor='center', justify='center')
-				self.reconstructing=False
-				return
-		elif pathlib.Path(self.cropped_image_file).suffix == ".png":
-			try:
-				print(self.rgb_alpha)
-				self.acropalypse_Instance.reconstruct_image(self.cropped_image_file, int(self.width_entry.get() or 1920), int(self.height_entry.get() or 1080), self.rgb_alpha)
-			except Exception as e:
-				self.label_log.config(text=f"Error reconstructing the image: {e}", anchor='center', justify='center')
-				self.reconstructing=False
-				return
-		try:
-			if pathlib.Path(self.cropped_image_file).suffix == ".gif":
-				image = Image.open(os.path.join(tempdir, 'restored.gif'))
-			elif pathlib.Path(self.cropped_image_file).suffix == ".png":
-				image = Image.open(os.path.join(tempdir, 'restored.png'))
-				
-			# Größe des Bildes entsprechend anpassen
-			max_width = round(self.left_frame.winfo_width() * 0.98)
-			max_height = round(self.left_frame.winfo_height() * 0.98)
-			width, height = image.size
-			if width > max_width:
-				new_height = int(height * max_width / width)
-				image = image.resize((max_width, new_height))
-				width, height = image.size
-			if height > max_height:
-				new_width = int(width * max_height / height)
-				image = image.resize((new_width, max_height))
-			
-			photo = ImageTk.PhotoImage(image)
-			self.right_label.config(image=photo)
-			self.right_label.image = photo
-			self.right_label.pack()
-			self.label_log.config(text=f"Reconstructed the image successfully", anchor='center', justify='center')
-			self.reconstructing=False
-		except Exception:
-			self.label_log.config(text=f"Error reconstructing the image! \nAre you using the right mode and resolution?", anchor='center', justify='center')
-			self.reconstructing=False
-		
-	def save_image(self):
-	# Check if the image is reconstructed
-		if self.right_label.image:
-			# Open save file dialog
-			file_path = asksaveasfilename(defaultextension=".png", filetypes=[("PNG Files", "*.png"), ("GIF Files", "*.gif")], parent=self)
-
-			if file_path:
-				# Save the image
-				if pathlib.Path(self.cropped_image_file).suffix == ".gif":
-					restored_image_path = os.path.join(tempdir, 'restored.gif')
-				elif pathlib.Path(self.cropped_image_file).suffix == ".png":
-					restored_image_path = os.path.join(tempdir, 'restored.png')
-
-				shutil.copy2(restored_image_path, file_path)
-				self.label_log.config(text="Image saved successfully!", anchor='center', justify='center')
-		else:
-			self.label_log.config(text="No image to save, reconstruct an image first.", anchor='center', justify='center')
-
-def dark_title_bar(window):
-    """
-    MORE INFO:
-    https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute
-    """
-    window.update()
-    DWMWA_USE_IMMERSIVE_DARK_MODE = 20
-    set_window_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
-    get_parent = ctypes.windll.user32.GetParent
-    hwnd = get_parent(window.winfo_id())
-    rendering_policy = DWMWA_USE_IMMERSIVE_DARK_MODE
-    value = 2
-    value = ctypes.c_int(value)
-    set_window_attribute(hwnd, rendering_policy, ctypes.byref(value),
-                         ctypes.sizeof(value))
-
-def maximize(frame):
-#Optimize Window Scaling
-	try:
-		if os_name == 'Linux':
-			frame.attributes('-zoomed', True)
-		if os_name == 'Windows':
-			frame.state('zoomed')
-	except:
-		pass
-
-def optimize_scaling(frame):
-	try:
-		if os_name == 'Linux':
-			pass
-		if os_name == 'Windows':
-			ctypes.windll.shcore.SetProcessDpiAwareness(2)
-			dark_title_bar(frame)
-		frame.tk.call('tk', 'scaling', 2.0)
-	except:
-		pass
-
-def display_initial_window():
-	initial_window = Tk()
-	initial_window.title("Select Tool")
-
-	def open_restore_gui():
-		restore = Toplevel()
-		restore.title('Acropalypse Multi Tool')
-		restore.option_add('*foreground', 'black')  # set all tk widgets' foreground to black
-
-		# Fenstergröße setzen
-		restore.root_width = round(restore.winfo_screenwidth() * 0.98)
-		restore.root_height = round(restore.winfo_screenheight() *0.96)
-		min_width = int(restore.root_width * 0.75)
-		min_height = int(restore.root_height * 0.75)
-		restore.geometry("{}x{}".format(restore.root_width, restore.root_height))
-		restore.minsize(min_width, min_height)
-
-		#optimize Scaling
-		optimize_scaling(restore)
-		maximize(restore)
-
-		app = RestoreTool(restore, restore)
-		app.pack()
-		sv_ttk.set_theme("dark")
-		style = ttk.Style()
-		button_text = "Acropalypse Now!"
-		button_font = font.nametofont("TkDefaultFont")
-		button_width = button_font.measure(button_text) // button_font.measure("0") + 6
-		style.configure("TButton", width=button_width, anchor='center')
-		style.configure('my.TButton', foreground='white', background='red')
-
-		restore.mainloop()
-	
-	def open_detect_gui():
-		detect = Toplevel()
-		detect.title('Acropalypse Multi Tool')
-		detect.option_add('*foreground', 'black')  # set all tk widgets' foreground to black
-
-		# Fenstergröße setzen
-		detect.root_width = round(detect.winfo_screenwidth() * 0.76)
-		detect.root_height = round(detect.winfo_screenheight() *0.76)
-		min_width = int(detect.root_width * 0.74)
-		min_height = int(detect.root_height * 0.74)
-		detect.geometry("{}x{}".format(detect.root_width, detect.root_height))
-		detect.minsize(min_width, min_height)
-
-		#optimize Scaling
-		optimize_scaling(detect)
-
-		app = DetectTool(detect, detect)
-		app.pack()
-		sv_ttk.set_theme("dark")
-
-		detect.mainloop()
-
-	# Set Windowsize
-	initial_window.root_width = round(initial_window.winfo_screenwidth() * 0.28)
-	initial_window.root_height = round(initial_window.winfo_screenheight() *0.15)
-	min_width = int(initial_window.root_width * 0.95)
-	min_height = int(initial_window.root_height * 0.95)
-	initial_window.geometry("{}x{}".format(initial_window.root_width, initial_window.root_height))
-	initial_window.minsize(min_width, min_height)
-
-	
-	# Create a canvas for buttons
-	canvas = Canvas(initial_window, height=initial_window.root_height, highlightthickness=0)
-	canvas.pack(fill="both", expand=True)
-
-	button_detection = ttk.Button(initial_window, text="Detection Tool", style="TButton", command=open_detect_gui)
-	button_restoring = ttk.Button(initial_window, text="Restoring Tool", style="TButton", command=open_restore_gui)
-
-	# Calculate the center coordinates for each button
-	button_detection_x = initial_window.root_width  // 2 - button_detection.winfo_reqwidth()
-	button_restoring_x = initial_window.root_width  // 2 + button_restoring.winfo_reqwidth()
-	button_y = initial_window.root_height // 2
-
-	canvas.create_window(button_detection_x, button_y, window=button_detection, anchor="center")
-	canvas.create_window(button_restoring_x, button_y, window=button_restoring, anchor="center")
-
-	sv_ttk.set_theme("dark")
-	optimize_scaling(initial_window)
-	initial_window.mainloop()
 
 if __name__ == "__main__":
-    display_initial_window()
+    App().mainloop()
