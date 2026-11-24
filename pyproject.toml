@@ -1,0 +1,15 @@
+[build-system]
+requires = ["maturin>=1.8,<2"]
+build-backend = "maturin"
+
+[project]
+name = "acropalypse-multi-tool"
+version = "2.0.0"
+description = "Cross-platform PNG/GIF Acropalypse detection and recovery tool"
+requires-python = ">=3.10"
+dependencies = ["Pillow>=11.0.0"]
+
+[tool.maturin]
+manifest-path = "gif_lib/gif_lib_src/Cargo.toml"
+python-source = "."
+module-name = "gif_lib.acropalypse_gif"

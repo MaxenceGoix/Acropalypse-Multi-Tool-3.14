@@ -1,0 +1,1 @@
+@echo off\npython gui.py\n

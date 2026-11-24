@@ -1,2 +1,1 @@
-Pillow==9.5.0
-sv_ttk==2.4.3
+Pillow>=11.0.0\n

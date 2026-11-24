@@ -1,0 +1,1 @@
+#!/usr/bin/env sh\nexec python3 gui.py "$@"\n

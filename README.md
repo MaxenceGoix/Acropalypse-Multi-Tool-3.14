@@ -1,79 +1,39 @@
-# Acropalypse Restoration and Detection Multi-Tool
+# Acropalypse Multi-Tool — version modernisée
 
-### A Comprehensive Solution for Acropalypse-Affected Images
+Application de bureau pour détecter des PNG/GIF contenant des données après leur fin normale et tenter de reconstruire les images concernées.
 
-Easily restore PNG and GIF files that have fallen victim to the Acropalypse CVE from 2023. This all-in-one solution effectively recovers image data accidentially stored in cropped screenshots by Google Pixel phones or Windows Snipping Tool, and can search and detect vulnerable images within local folders.
+## Nouveautés
 
-This Tool works seamlessly with Python 3.10 cross-platform on Windows and Linux-based systems.
+- Interface réunie dans une seule fenêtre avec deux onglets : **Détection** et **Reconstruction**.
+- Aperçus côte à côte, profils d’appareils, dimensions modifiables et sauvegarde explicite.
+- Analyse récursive des dossiers.
+- Traitements longs exécutés en arrière-plan ; les mises à jour de l’interface restent sur le thread Tk.
+- Chemins de fichiers temporaires uniques, sans dépendance à un nom `restored.png` partagé.
+- Dépendances Python actualisées et extension GIF reconstruite depuis les sources avec PyO3.
+- CI de compilation de wheels pour Windows et Linux, Python 3.10–3.14.
 
-Also, yes this code is quite dirty, as it was created as part of a lecture at University of Applied Sciences Upper Austria, and students dont have much spare time - so deal with it 😎
+## Démarrer
 
-**Key Features & Improvements**:
-- Restore and detect both GIF and PNG formats
-- Support for PNG images with and without an alpha channel (RGB and RGBA)
-- Compatible with all resolutions and tools, including Snipping Tool and Pixel Markup
-- Enhanced PNG data restoration for improved reference color filling
+Consultez [BUILD.md](BUILD.md) pour l’installation détaillée.
 
-<p align="center">
-  <img src="tool.png" width="600">
-</p>
+Pour lancer l’interface après installation des dépendances :
 
-**Based on**:
-- https://gist.github.com/DavidBuchanan314/93de9d07f7fab494bcdf17c2bd6cef02
-- https://github.com/heriet/acropalypse-gif
-
-**Affected CVE´s**:
-- CVE-2023-28303 https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-28303
-- CVE-2023-21036 https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2023-21036
-
-## Getting Started
-The GUI has two main tools:
-
-- DetectTool: This tool helps to identify the pictures that are vulnerable to the acropalypse bug in a specific folder.
-- RestoreTool: This tool assists in restoring the vulnerable pictures.
-
-Install the required Python Version and Libraries and open the Tool via Commandline with
-
-`python ./gui.py`
-
-You can also use the prebuilt **docker image**:
-
-On Linux run:
+```bash
+python gui.py
 ```
-xhost +local:
-sudo docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix frankthetankmusic/acropalypse-multi-tool
-```
-This docker image uses the python:3.10 container, see Dockerfile for how it is configured.
 
-On Windows you will have to install and configure X-Server for the gui to work.
+L’installation de base active le traitement PNG. Le support GIF nécessite la compilation de l’extension native Rust.
 
-If you want to build the container yourself use: `sudo docker build -t acropalypse-multi-tool .` and then run `xhost +local:` and `sudo docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix acropalypse-multi-tool`.
-### System Compatibility
+## Compatibilité et limites
 
-- Python 3.10 (other versions may also work)
-  - update 03-2024: working with Python 3.11 on Linux Mint 21.2 Cinnamon
-- Windows / Linux / WSL
+- Python 3.10–3.14
+- Windows 10/11 et Linux
+- Tkinter requis
+- Pillow requis
+- Rust requis uniquement pour compiler le support GIF
 
-### Required Libraries
+Ce projet est un outil de récupération spécialisé dans certains fichiers affectés par la vulnérabilité aCropalypse (notamment des captures d’écran Windows Snipping Tool et certains appareils Pixel). Il ne peut pas restaurer arbitrairement toute image recadrée. La détection de données supplémentaires après IEND est un indicateur, pas une preuve absolue de vulnérabilité.
 
-Pillow==9.5.0<br>
-sv_ttk==2.4.3
+## Crédits
 
-## How to use RestoreTool
-
-The following steps illustrate how to use the RestoreTool:
-
-1. **Select Image**: Start by clicking on the "Select Image" button to load the image you want to restore. It will open a dialog box allowing you to choose a PNG or GIF file from your system.
-
-2. **Choose Preset**: The tool supports various presets available in a dropdown menu. These presets correspond to different devices and tools, such as the Windows Snipping Tool and several Google Pixel devices. Choose the correct preset that matches the original source of your image. If your device is not listed, you can manually input the original picture's pixel height and width in the next steps.
-
-3. **Input Original Width and Height**: If you have chosen a custom RGB or RGBA preset, or if your device is not in the list, you should input the original width and height of the picture. This information is crucial for the restoration process.
-
-4. **Restore Image**: Click on the "Acropalypse Now!" button to initiate the restoration process. This operation could take some time depending on the size and complexity of the image.
-
-5. **Save Image**: Once the image is restored, you can save the picture by clicking on the "Save Image" button.
-
-## Troubleshooting
-If any errors occur during the restoration process, an error message will be displayed in the center column. If the error persists, please open an issue detailing the error message and the steps you took before the error occurred.
-
-Please note that this tool can only restore images from the Windows Snipping Tool and certain Google Pixel devices that have been affected by the acropalypse bug. If your image is from a different source, the tool may not be able to restore it correctly.
+La logique initiale de reconstruction PNG et GIF provient du projet d’origine et de ses contributeurs. Voir [LICENSE](LICENSE) et les références dans l’historique du projet.

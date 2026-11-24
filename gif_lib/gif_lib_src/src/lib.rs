@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, SeekFrom};
 use weezl::{decode::Decoder as LzwDecoder, BitOrder};
-use cpython::{py_fn, py_module_initializer, PyResult, Python};
+use pyo3::prelude::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -17,7 +17,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
-fn detect(_py: Python, filepath: String) -> PyResult<bool> {
+#[pyfunction]\nfn detect(filepath: String) -> PyResult<bool> {
     let file = File::open(filepath.clone()).unwrap();
     let mut buf = BufReader::new(file);
 
@@ -35,7 +35,7 @@ fn detect(_py: Python, filepath: String) -> PyResult<bool> {
     }
 }
 
-fn restore(_py: Python, filepath: String, restore_filepath: String, width: u16, height: u16) -> PyResult<String> {
+#[pyfunction]\nfn restore(filepath: String, restore_filepath: String, width: u16, height: u16) -> PyResult<String> {
     let file = File::open(filepath.clone()).unwrap();
     let mut buf = BufReader::new(file);
 
@@ -68,12 +68,12 @@ fn restore(_py: Python, filepath: String, restore_filepath: String, width: u16, 
     Ok(format!("Restored file {} to {}x{}", filepath, width, height))
 }
 
-py_module_initializer!(acropalypse_gif, |py, m| {
-    m.add(py, "__doc__", "This module is for detecting and restoring acropalypse-gif files.")?;
-    m.add(py, "detect", py_fn!(py, detect(filepath: String)))?;
-    m.add(py, "restore", py_fn!(py, restore(filepath: String, restore_filepath: String, width: u16, height: u16)))?;
+#[pymodule]
+fn acropalypse_gif(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(detect, module)?)?;
+    module.add_function(wrap_pyfunction!(restore, module)?)?;
     Ok(())
-});
+}
 
 
 fn extract_rest_compressed_data(rest: Vec<u8>) -> Result<Vec<u8>> {
