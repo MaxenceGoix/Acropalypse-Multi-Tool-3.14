@@ -1,129 +1,220 @@
-# Acropalypse Restoration & Detection Multi-Tool
+# Acropalypse Multi-Tool 3.14
 
-### A modernized, cross-platform version of the original Acropalypse restoration tool
+### PNG & GIF Detection, Restoration and Recovery
 
-A tool to detect and restore PNG and GIF images affected by the **aCropalypse vulnerability**, discovered in 2023.
+A modernized, cross-platform fork of the original Acropalypse Multi-Tool.
 
-The vulnerability could cause cropped screenshots to retain image data that should have been permanently removed. In certain circumstances, this made it possible to recover parts of the original, uncropped image.
+This application helps detect and attempt to restore PNG and GIF images affected by the **aCropalypse vulnerabilities** discovered in 2023.
 
-This project provides tools to detect potentially affected images in local folders and attempt to restore their original contents.
+These vulnerabilities could cause cropped screenshots to retain image data that users expected to have been permanently removed. In certain circumstances, parts of the original, uncropped image could therefore be recovered.
 
----
-
-## ⚠️ About This Fork — Please Read
-
-**I want to be completely transparent about the origin of this project.**
-
-I did not create the original software, and I claim absolutely no credit for its original implementation.
-
-All original development credits belong to:
-
-**[frankthetank-music – Acropalypse-Multi-Tool](https://github.com/frankthetank-music/Acropalypse-Multi-Tool)**
-
-This repository is simply my attempt to modernize and preserve that project.
-
-The original version was based on Python 3.10 and was becoming inconvenient to use with newer Python environments. I wanted a more accessible version, with updated dependencies, improved usability, and better cross-platform support.
-
-I used AI to carry out the modernization work, including code modifications, compatibility updates, and interface improvements.
-
-To be clear:
-- I did not write the original application.
-- I take no credit for the original algorithms or restoration techniques.
-- The modernization was performed with AI assistance.
-- My contribution was essentially to initiate this update and provide a place where the project could continue to be accessible.
-
-**All credits for the original project go to its original author and contributors.**
-
-Please visit and support the original repository:
-
-👉 https://github.com/frankthetank-music/Acropalypse-Multi-Tool
-
-This fork is not an official continuation of the original project.
+The application provides a graphical interface for scanning folders, identifying potentially affected images, and attempting image reconstruction.
 
 ---
 
-## Key Features
+## ⚠️ About This Fork & Credits
 
-- Restore and detect both PNG and GIF formats.
-- Support for PNG images with and without alpha channels (RGB and RGBA).
-- Compatibility with images affected by Google Pixel Markup and Windows Snipping Tool.
-- Support for different image resolutions and device presets.
-- Detection of potentially vulnerable images in local folders.
-- Batch scanning of directories.
-- Improved graphical interface.
-- Updated Python packaging and dependency management.
-- Cross-platform development targeting Windows and Linux.
+**Let's be clear: I take absolutely no credit for the original project.**
 
-## Interface
+The original application was created by **Frank Weber (frankthetank-music)**.
 
-The graphical interface provides two main tools:
+All credits for the original implementation, research, algorithms and development belong to the original author and the respective contributors.
 
-- **DetectTool:** Scan folders and identify potentially affected images.
-- **RestoreTool:** Attempt to reconstruct the original image data.
+Original repository:
 
-![Acropalypse Multi-Tool Interface](tool.png)
+**https://github.com/frankthetank-music/Acropalypse-Multi-Tool**
+
+So, why does this fork exist?
+
+The original project was based on Python 3.10, and I wanted a version that would be easier to use with newer Python environments. I also wanted to improve the interface and make the project easier to install, build and preserve.
+
+I used AI to carry out the modernization work.
+
+My involvement was essentially:
+- Forking the original project.
+- Asking AI to modernize the codebase.
+- Improving the graphical interface.
+- Updating the Python packaging and build configuration.
+- Adding cross-platform build automation.
+- Preserving the project in a repository that I can easily maintain and access.
+
+**I did not create the original software. I am not claiming authorship of its original code or restoration techniques.**
+
+This is an unofficial, AI-assisted modernization and preservation effort.
+
+If you find this tool useful, please also visit the original repository and give credit to its creator.
+
+---
+
+## What's New in This Fork?
+
+### 1. Redesigned Graphical Interface
+
+The original interface has been replaced with a redesigned desktop application.
+
+The new interface uses a single window with two dedicated tabs:
+
+- **Detection:** Scan folders for potentially affected PNG and GIF files.
+- **Restoration:** Load an image, configure its original dimensions, preview the source and reconstructed images, and save the result.
+
+Other interface improvements include:
+
+- Dark-themed interface.
+- Resizable application window.
+- Side-by-side image previews.
+- More accessible restoration controls.
+- Device and screenshot presets.
+- Editable original image dimensions.
+- Explicit save-result action.
+- Progress indication during long-running operations.
+
+### 2. Improved Image Detection
+
+The detection tool can recursively scan a selected directory and its subdirectories.
+
+Supported detection formats:
+
+- PNG
+- GIF (requires the native GIF extension)
+
+For PNG files, the detector checks whether additional data exists after the normal PNG `IEND` chunk.
+
+For GIF files, detection is provided by the native Rust extension.
+
+Double-clicking a detection result opens the corresponding file using the operating system's default application.
+
+**Important:** Detection results indicate potentially affected files. They do not guarantee that an image is vulnerable or that it can be successfully restored.
+
+### 3. Improved Image Restoration Workflow
+
+The restoration interface provides:
+
+- PNG and GIF image selection.
+- Original image dimension configuration.
+- Presets for supported screenshot sources and Google Pixel devices.
+- Custom RGB and RGBA configurations.
+- Original image preview.
+- Reconstructed image preview.
+- Dedicated reconstruction and save buttons.
+
+Available presets include:
+
+- Windows 11 Snipping Tool
+- Google Pixel 3 / 3 XL / 3a / 3a XL
+- Google Pixel 4 / 4 XL / 4a
+- Google Pixel 5 / 5a
+- Google Pixel 6 / 6 Pro / 6a
+- Google Pixel 7 / 7 Pro
+- Custom RGB
+- Custom RGBA
+
+The original dimensions are important for reconstruction. Incorrect dimensions or an incorrect preset may produce an inaccurate result.
+
+### 4. Improved Processing
+
+Several internal improvements have also been introduced:
+
+- Long-running detection and restoration operations run in background threads.
+- GUI updates are handled through the Tkinter main thread.
+- Unique temporary output paths are used to avoid conflicts between simultaneous or successive operations.
+- Improved error handling and status reporting.
+- Cleaner separation between the graphical interface and the underlying restoration code.
+
+### 5. Modernized Python Packaging
+
+The project now uses a modern Python packaging configuration through `pyproject.toml`.
+
+Main changes:
+
+- Updated Pillow dependency.
+- Maturin-based native extension compilation.
+- PyO3 integration for the Rust GIF component.
+- Removal of old precompiled `.pyd` and `.so` binaries.
+- Improved installation workflow.
+
+The old native binaries were platform- and Python-version-specific. The new approach builds the extension for the active Python environment.
+
+### 6. Cross-Platform Build Automation
+
+A GitHub Actions workflow has been added to automate native GIF extension builds.
+
+The workflow targets:
+
+| Platform | Python versions |
+|---|---|
+| Windows | 3.10, 3.11, 3.12, 3.13, 3.14 |
+| Linux | 3.10, 3.11, 3.12, 3.13, 3.14 |
+
+Builds are triggered by pushes, pull requests and manual workflow execution.
+
+Generated wheels are uploaded as GitHub Actions artifacts.
+
+This automation is intended to simplify distribution and installation across supported environments.
 
 ---
 
 ## Security Background — The aCropalypse Vulnerabilities
 
-The aCropalypse vulnerability was publicly disclosed in March 2023.
+The aCropalypse vulnerabilities were publicly disclosed in March 2023.
 
-It affected screenshot editing applications that did not correctly truncate image files after cropping or editing.
+They affected screenshot editing applications that did not correctly truncate image files after cropping or editing.
 
-As a result, image data that users expected to be permanently deleted could remain in the underlying file.
-
-Two major vulnerabilities are associated with this issue:
+As a result, information that users believed had been removed could remain inside the resulting image file.
 
 ### CVE-2023-21036 — Google Pixel
 
-Affected Google's Pixel screenshot editing application, **Markup**.
+This vulnerability affected Google's Pixel Markup screenshot editing application.
 
-A logic error in the image export process could prevent the file from being properly truncated after editing.
+A flaw in the image editing and saving process could leave parts of the original image data in the resulting file.
 
-Consequently, the original image data could remain recoverable even after cropping.
+Affected platform:
+- Google Pixel devices.
 
-- Platform: Google Pixel / Android
-- Component: Markup
-- Impact: Potential disclosure of information users believed they had removed.
-
-References:
-- [NVD – CVE-2023-21036](https://nvd.nist.gov/vuln/detail/CVE-2023-21036)
-- [Android Security Bulletin – March 2023](https://source.android.com/docs/security/bulletin/2023-03-01)
+Reference:
+- [NVD — CVE-2023-21036](https://nvd.nist.gov/vuln/detail/CVE-2023-21036)
+- [Android Security Bulletin — March 2023](https://source.android.com/docs/security/bulletin/2023-03-01)
 
 ### CVE-2023-28303 — Microsoft Windows
 
-Affected Microsoft's screenshot applications:
+This vulnerability affected Microsoft's screenshot applications:
 
-- Snip & Sketch (Windows 10)
-- Snipping Tool (Windows 11)
+- Snip & Sketch on Windows 10.
+- Snipping Tool on Windows 11.
 
-The applications could fail to properly remove cropped image data when overwriting an existing image.
+Under certain circumstances, the applications could fail to properly truncate an image after editing or cropping.
 
-This could allow someone with access to the resulting image file to recover information from the original screenshot.
+This could leave original image data recoverable.
 
-- Platform: Windows 10 / Windows 11
-- Components: Snip & Sketch and Snipping Tool
-- Impact: Information disclosure.
+Reference:
+- [Microsoft Security Response Center — CVE-2023-28303](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-28303)
+- [NVD — CVE-2023-28303](https://nvd.nist.gov/vuln/detail/CVE-2023-28303)
 
-References:
-- [Microsoft Security Response Center – CVE-2023-28303](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-28303)
-- [NVD – CVE-2023-28303](https://nvd.nist.gov/vuln/detail/CVE-2023-28303)
-
-**Important:** These vulnerabilities have been addressed by security updates. This application is intended for recovering eligible legacy images and testing, not for exploiting systems.
+**Note:** Security updates have been released for the affected software. This tool is intended for image recovery, research and educational purposes.
 
 ---
 
-## Getting Started
+## Requirements
 
-### Requirements
+| Component | Requirement |
+|---|---|
+| Python | 3.10–3.14 |
+| Operating systems | Windows 10/11 and Linux |
+| GUI | Tkinter |
+| Image processing | Pillow 11.0 or newer |
+| Native GIF support | Rust stable + Maturin |
+| Packaging | PyInstaller (optional) |
 
-- Python 3.10 or newer.
-- Windows or Linux.
-- Required Python dependencies.
-- Rust toolchain for building the optional native GIF component.
+Tkinter must be available in your Python installation.
 
-The project is being modernized to support newer Python versions. Compatibility should be verified against the actual release and CI build results.
+On some Linux distributions, you may need to install it separately:
+
+```bash
+sudo apt install python3-tk
+```
+
+---
+
+## Installation
 
 ### Windows
 
@@ -144,7 +235,8 @@ python -m venv .venv
 Install dependencies:
 
 ```powershell
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 Launch the application:
@@ -178,7 +270,8 @@ source .venv/bin/activate
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 Launch the application:
@@ -194,82 +287,223 @@ chmod +x run_linux.sh
 ./run_linux.sh
 ```
 
-### Building the Native GIF Component
+### What works with the basic installation?
 
-If you need the native GIF restoration functionality, install Rust and Maturin:
+The basic Python installation provides:
+
+- The graphical interface.
+- PNG detection.
+- PNG reconstruction.
+- Image previews and saving.
+
+**GIF detection and restoration require the native Rust extension to be compiled and installed.**
+
+---
+
+## Enabling GIF Support
+
+The GIF component is written in Rust and exposed to Python through PyO3.
+
+The previous precompiled native binaries have been removed. The extension must now be built for your operating system and Python environment.
+
+### Prerequisites
+
+Install Rust using rustup:
+
+https://rustup.rs/
+
+Then install Maturin:
 
 ```bash
-pip install maturin
-pip install .
+python -m pip install --upgrade maturin
 ```
 
-This builds and installs the native Python extension.
+From the root of the repository, build and install the extension:
 
-For more detailed build instructions, see [BUILD.md](BUILD.md).
+```bash
+python -m pip install .
+```
 
----
+This compiles the native GIF module for the active Python environment.
 
-## How to Use RestoreTool
+Restart the application:
 
-1. **Select Image:** Click the image selection button and choose a PNG or GIF file.
-2. **Choose Preset:** Select the appropriate preset corresponding to the original device or screenshot application.
-3. **Set Original Dimensions:** If using a custom preset, manually enter the original image width and height.
-4. **Restore Image:** Start the restoration process.
-5. **Save Image:** Save the reconstructed image to your preferred location.
+```bash
+python gui.py
+```
 
-The success of restoration depends on the original image, its format, the cropping operation, and the information still available in the file.
-
-Not every cropped image can be restored.
-
-## How to Use DetectTool
-
-1. Open the detection interface.
-2. Select the folder containing the images you want to inspect.
-3. Start the scanning process.
-4. Review the results to identify potentially affected files.
-
-Detection results should be treated as indications rather than guarantees of successful restoration.
+For additional build information, see [BUILD.md](BUILD.md).
 
 ---
 
-## Original Project & References
+## Building Standalone Applications
 
-This project builds upon the work of the original author and the following research and implementations:
+The project includes a PyInstaller packaging script.
 
-- **Original Multi-Tool:** https://github.com/frankthetank-music/Acropalypse-Multi-Tool
-- **David Buchanan's original research:** https://gist.github.com/DavidBuchanan314/93de9d07f7fab494bcdf17c2bd6cef02
-- **GIF restoration implementation:** https://github.com/heriet/acropalypse-gif
+This allows you to create an executable that does not require users to manually install Python.
 
-All original credits belong to their respective authors.
+Install PyInstaller:
 
-Please refer to the original repositories for their respective licenses and attribution requirements.
+```bash
+python -m pip install pyinstaller
+```
+
+Run:
+
+```bash
+python package_app.py
+```
+
+The generated application will be placed in the `dist/` directory.
+
+**Important:** PyInstaller builds must be performed on the target operating system.
+
+- Build on Windows to generate a Windows executable.
+- Build on Linux to generate a Linux executable.
+
+Cross-compilation between Windows and Linux is not supported by this packaging workflow.
+
+For GIF support, compile and install the native extension before packaging.
+
+---
+
+## Running Tests
+
+The repository includes basic smoke tests.
+
+Run them with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The current smoke test checks that the demo PNG files can be processed by the PNG detector.
+
+The test suite is intentionally small and does not constitute complete validation of every restoration scenario or operating system.
+
+---
+
+## Project Structure
+
+```text
+Acropalypse-Multi-Tool-3.14/
+│
+├── .github/
+│   └── workflows/
+│       └── build.yml
+│
+├── demo-images/
+│
+├── gif_lib/
+│   ├── __init__.py
+│   └── gif_lib_src/
+│       ├── Cargo.toml
+│       └── src/
+│           └── lib.rs
+│
+├── tests/
+│   └── test_smoke.py
+│
+├── acropalypse.py
+├── gui.py
+├── package_app.py
+├── pyproject.toml
+├── requirements.txt
+├── run_linux.sh
+├── run_windows.bat
+├── BUILD.md
+├── LICENSE
+└── README.md
+```
 
 ---
 
 ## Troubleshooting
 
-If an error occurs during restoration:
+### Tkinter is missing
 
-1. Check that all dependencies are installed.
-2. Verify that the image format is supported.
-3. Check that the original dimensions and device preset are correct.
-4. If using GIF restoration, verify that the native extension has been built and installed.
-5. If the problem persists, open a GitHub issue with the error message and reproduction steps.
+On Debian/Ubuntu:
+
+```bash
+sudo apt install python3-tk
+```
+
+### GIF support is unavailable
+
+Make sure Rust and Maturin are installed, then run:
+
+```bash
+python -m pip install .
+```
+
+Make sure you use the same virtual environment to install the extension and launch the application.
+
+### Rust compilation fails
+
+Update your Rust toolchain:
+
+```bash
+rustup update
+```
+
+Then retry the installation.
+
+### Restoration does not produce the expected result
+
+Check the following:
+
+- The original image dimensions.
+- The selected device preset.
+- Whether the source image is actually affected by a supported vulnerability.
+- Whether the file still contains enough data for reconstruction.
+
+Not every cropped image can be restored.
+
+---
+
+## Limitations
+
+This application is specialized in certain PNG and GIF files affected by the aCropalypse-related image editing issues.
+
+It is not a general-purpose image recovery tool.
+
+Successful reconstruction depends on:
+- The original image format.
+- The application or device that created the image.
+- The original image dimensions.
+- The data remaining in the edited file.
+
+Detection does not guarantee successful reconstruction.
+
+The compatibility matrix describes the intended build targets; actual runtime compatibility should be confirmed through CI results and testing on the target system.
+
+---
+
+## Original Research & Acknowledgements
+
+This fork is based on the original work and research of:
+
+- **Frank Weber:** [Original Acropalypse Multi-Tool](https://github.com/frankthetank-music/Acropalypse-Multi-Tool)
+- **David Buchanan:** [Original aCropalypse research](https://gist.github.com/DavidBuchanan314/93de9d07f7fab494bcdf17c2bd6cef02)
+- **Heriet:** [Acropalypse GIF implementation](https://github.com/heriet/acropalypse-gif)
+
+All original credits belong to their respective authors and contributors.
+
+The original MIT license and copyright notices are retained in this repository. Please consult [LICENSE](LICENSE) for the applicable license terms.
 
 ---
 
 ## Disclaimer
 
-This software is provided for educational, research, and image recovery purposes.
+This project is provided for educational, research and image recovery purposes.
 
-Restoration is not guaranteed. Results depend on the image format, file contents, and the extent to which the original image data remains available.
+No guarantee is made that a particular image can be detected or restored successfully.
 
-Use this software only on images you own or are authorized to inspect.
+Only use this software on images you own or are authorized to inspect.
 
-**This repository is an AI-assisted modernization of an existing open-source project. It is not an original implementation, and no ownership of the original work is claimed.**
+This repository is an unofficial, AI-assisted modernization of an existing project. It does not claim authorship of the original implementation.
 
-Once again, all original development credits go to:
+**All credit for the original project belongs to Frank Weber and the original contributors.**
 
-**[frankthetank-music](https://github.com/frankthetank-music/Acropalypse-Multi-Tool)**
+Original project: https://github.com/frankthetank-music/Acropalypse-Multi-Tool
 
-Thank you for creating and sharing the original project.
